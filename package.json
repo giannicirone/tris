@@ -1,0 +1,11 @@
+{
+  "name": "tris",
+  "private": true,
+  "description": "Gioco del tris contro il computer (minimax)",
+  "scripts": {
+    "test": "node tests/imbattibile.js"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

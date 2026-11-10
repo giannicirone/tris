@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tris</title>
+<style>
+  :root {
+    --bg: #f4f1ea;
+    --fg: #22252b;
+    --muted: #6b6f78;
+    --cell: #ffffff;
+    --line: #d8d3c8;
+    --x: #d1495b;
+    --o: #2e86ab;
+    --win: #ffe8a3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1b1d22;
+      --fg: #eceae4;
+      --muted: #9a9ea8;
+      --cell: #262931;
+      --line: #383c46;
+      --x: #ff6b7d;
+      --o: #5cb8e0;
+      --win: #4a4220;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: 16px;
+  }
+  main {
+    width: 100%;
+    max-width: 360px;
+    text-align: center;
+  }
+  h1 { margin: 0 0 4px; font-size: 2rem; }
+  .sub { margin: 0 0 20px; color: var(--muted); font-size: 0.95rem; }
+  .board {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    aspect-ratio: 1;
+  }
+  .cell {
+    background: var(--cell);
+    border: 2px solid var(--line);
+    border-radius: 12px;
+    font: inherit;
+    font-size: clamp(2.5rem, 14vw, 4rem);
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--fg);
+    transition: background .15s, transform .1s;
+  }
+  .cell:hover:not(:disabled) { transform: scale(1.03); }
+  .cell:disabled { cursor: default; }
+  .cell.x { color: var(--x); }
+  .cell.o { color: var(--o); }
+  .cell.win { background: var(--win); }
+  .status {
+    margin: 20px 0 12px;
+    min-height: 1.5em;
+    font-size: 1.15rem;
+    font-weight: 600;
+  }
+  .new-game {
+    font: inherit;
+    font-size: 1rem;
+    font-weight: 600;
+    padding: 10px 22px;
+    border: none;
+    border-radius: 999px;
+    background: var(--fg);
+    color: var(--bg);
+    cursor: pointer;
+  }
+  .new-game[hidden] { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Tris</h1>
+  <p class="sub">Tu sei <strong style="color:var(--x)">X</strong>, il computer è <strong style="color:var(--o)">O</strong></p>
+  <div class="board" id="board" role="grid" aria-label="Griglia di gioco"></div>
+  <p class="status" id="status" aria-live="polite"></p>
+  <button class="new-game" id="newGame" hidden>Nuova partita</button>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var HUMAN = "X";
+  var AI = "O";
+  var LINES = [
+    [0, 1, 2], [3, 4, 5], [6, 7, 8],
+    [0, 3, 6], [1, 4, 7], [2, 5, 8],
+    [0, 4, 8], [2, 4, 6]
+  ];
+
+  var boardEl = document.getElementById("board");
+  var statusEl = document.getElementById("status");
+  var newGameBtn = document.getElementById("newGame");
+  var cells = [];
+  var board;
+  var gameOver;
+
+  for (var i = 0; i < 9; i++) {
+    var btn = document.createElement("button");
+    btn.className = "cell";
+    btn.dataset.index = i;
+    btn.setAttribute("aria-label", "Casella " + (i + 1));
+    btn.addEventListener("click", onCellClick);
+    boardEl.appendChild(btn);
+    cells.push(btn);
+  }
+
+  function winnerLine(b) {
+    for (var i = 0; i < LINES.length; i++) {
+      var l = LINES[i];
+      if (b[l[0]] && b[l[0]] === b[l[1]] && b[l[0]] === b[l[2]]) return l;
+    }
+    return null;
+  }
+
+  function isFull(b) {
+    return b.every(function (c) { return c !== null; });
+  }
+
+  // Minimax: punteggio positivo se vince il computer, negativo se vince l'umano.
+  // La profondità fa preferire vittorie rapide e sconfitte lente.
+  function minimax(b, isAiTurn, depth) {
+    var line = winnerLine(b);
+    if (line) return b[line[0]] === AI ? 10 - depth : depth - 10;
+    if (isFull(b)) return 0;
+
+    var best = isAiTurn ? -Infinity : Infinity;
+    for (var i = 0; i < 9; i++) {
+      if (b[i] !== null) continue;
+      b[i] = isAiTurn ? AI : HUMAN;
+      var score = minimax(b, !isAiTurn, depth + 1);
+      b[i] = null;
+      best = isAiTurn ? Math.max(best, score) : Math.min(best, score);
+    }
+    return best;
+  }
+
+  function bestMove(b) {
+    var bestScore = -Infinity;
+    var move = -1;
+    for (var i = 0; i < 9; i++) {
+      if (b[i] !== null) continue;
+      b[i] = AI;
+      var score = minimax(b, false, 1);
+      b[i] = null;
+      if (score > bestScore) {
+        bestScore = score;
+        move = i;
+      }
+    }
+    return move;
+  }
+
+  function render() {
+    var line = winnerLine(board);
+    cells.forEach(function (cell, i) {
+      var v = board[i];
+      cell.textContent = v || "";
+      cell.className = "cell" + (v ? " " + v.toLowerCase() : "") +
+        (line && line.indexOf(i) !== -1 ? " win" : "");
+      cell.disabled = gameOver || v !== null;
+    });
+  }
+
+  function checkEnd() {
+    var line = winnerLine(board);
+    if (line) {
+      gameOver = true;
+      statusEl.textContent = board[line[0]] === HUMAN
+        ? "Hai vinto! 🎉"
+        : "Hai perso! Il computer ha vinto.";
+    } else if (isFull(board)) {
+      gameOver = true;
+      statusEl.textContent = "Pareggio!";
+    }
+    if (gameOver) newGameBtn.hidden = false;
+    return gameOver;
+  }
+
+  function onCellClick(e) {
+    var i = Number(e.currentTarget.dataset.index);
+    if (gameOver || board[i] !== null) return;
+
+    board[i] = HUMAN;
+    if (checkEnd()) { render(); return; }
+
+    board[bestMove(board)] = AI;
+    if (!checkEnd()) statusEl.textContent = "Tocca a te";
+    render();
+  }
+
+  function newGame() {
+    board = [null, null, null, null, null, null, null, null, null];
+    gameOver = false;
+    statusEl.textContent = "Tocca a te";
+    newGameBtn.hidden = true;
+    render();
+  }
+
+  newGameBtn.addEventListener("click", newGame);
+  newGame();
+})();
+</script>
+</body>
+</html>
